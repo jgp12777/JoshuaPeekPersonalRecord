@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Real-Time 3D Graphics with WebGL2</title>
+  <link rel="shortcut icon" type="image/png" href="../common/images/favicon.png" />
+
+  <!-- libraries -->
+  <link rel="stylesheet" href="../common/lib/normalize.css">
+  <script type="text/javascript" src="../common/lib/gl-matrix.js"></script>
+  <script type="text/javascript" src="../common/lib/dat.gui.js"></script>
+
+  <!-- modules -->
+  <script type="text/javascript" src="../common/js/utils.js"></script>
+  <script type="text/javascript" src="../common/js/EventEmitter.js"></script>
+  <script type="text/javascript" src="../common/js/Program.js"></script>
+  <script type="text/javascript" src="../common/js/Scene.js"></script>
+  <script type="text/javascript" src="../common/js/Clock.js"></script>
+  <script type="text/javascript" src="../common/js/Axis.js"></script>
+  <script type="text/javascript" src="../common/js/Floor.js"></script>
+  <script type="text/javascript" src="../common/js/Camera.js"></script>
+  <script type="text/javascript" src="../common/js/Controls.js"></script>
+  <script type="text/javascript" src="../common/js/Broom.js"></script>
+  <script type="text/javascript" src="../common/js/Wall.js"></script>
+  <script type="text/javascript" src="../common/js/Ceiling.js"></script>
+  <script type="text/javascript" src="../common/js/RoomFloor.js"></script>
+  <script type="text/javascript" src="../common/js/Door.js"></script>
+  <script type="text/javascript" src="../common/js/Table.js"></script>
+  <script type="text/javascript" src="../common/js/Microwave.js"></script>
+  <script type="text/javascript" src="../common/js/CouchBase.js"></script>
+  <script type="text/javascript" src="../common/js/CouchCushion.js"></script>
+  <script type="text/javascript" src="../common/js/CouchArmrestLeft.js"></script>
+  <script type="text/javascript" src="../common/js/CouchArmrestRight.js"></script>
+  <script type="text/javascript" src="../common/js/CouchBackCushion.js"></script>
+  <script type="text/javascript" src="../common/js/TrashCan.js"></script>
+  <script type="text/javascript" src="../common/js/WallOutlet.js"></script>
+
+  <!-- Vertex Shader -->
+  <script id="vertex-shader" type="x-shader/x-vertex">
+    #version 300 es
+    precision mediump float;
+
+    uniform mat4 uModelViewMatrix;
+    uniform mat4 uProjectionMatrix;
+    uniform mat3 uNormalMatrix;
+
+    in vec3 aVertexPosition;
+    in vec3 aVertexNormal;
+    in vec4 aVertexColor;
+
+    out vec3 vPosition;
+    out vec3 vNormal;
+
+    void main(void) {
+      vec4 vertexView = uModelViewMatrix * vec4(aVertexPosition, 1.0);
+      vPosition = vertexView.xyz;
+      vNormal = normalize(uNormalMatrix * aVertexNormal);
+      gl_Position = uProjectionMatrix * vertexView;
+    }
+  </script>
+
+  <!-- Fragment Shader -->
+  <script id="fragment-shader" type="x-shader/x-fragment">
+    #version 300 es
+    precision mediump float;
+
+    uniform mat4 uModelViewMatrix;
+    uniform vec3 uLightPosition;
+    uniform vec4 uLightAmbient;
+    uniform vec4 uLightDiffuse;
+    uniform vec4 uLightSpecular;
+    uniform vec4 uMaterialDiffuse;
+    uniform vec4 uMaterialSpecular;
+    uniform float uShininess;
+    uniform bool uWireframe;
+
+    in vec3 vPosition;
+    in vec3 vNormal;
+
+    out vec4 fragColor;
+
+    void main(void) {
+      if (uWireframe) {
+        fragColor = uMaterialDiffuse;
+      } else {
+        vec3 lightPosView = (uModelViewMatrix * vec4(uLightPosition, 1.0)).xyz;
+        vec3 N = normalize(vNormal);
+        vec3 L = normalize(lightPosView - vPosition);
+        vec3 V = normalize(-vPosition);
+        vec3 R = reflect(-L, N);
+
+        float distance = length(lightPosView - vPosition);
+        float attenuation = 1.0 / (1.0 + 0.005 * distance + 0.001 * distance * distance);
+
+        vec4 Ia = uLightAmbient;
+        float lambertTerm = max(dot(N, L), 0.01);
+        vec4 Id = uMaterialDiffuse * uLightDiffuse * lambertTerm * attenuation;
+        float specularTerm = pow(max(dot(R, V), 0.0), uShininess);
+        vec4 Is = uMaterialSpecular * uLightSpecular * specularTerm * attenuation;
+
+        fragColor = vec4(vec3(Ia + Id + Is), 1.0);
+      }
+    }
+  </script>
+
+  <script type="text/javascript">
+    'use strict';
+
+    let
+            gl, scene, program, camera, clock,
+            fov = 45,
+            fixedLight = true,
+            modelViewMatrix = mat4.create(),
+            projectionMatrix = mat4.create(),
+            normalMatrix = mat3.create(),
+            broomTransform = mat4.create(),
+            doorTransform = mat4.create(),
+            tableTransform = mat4.create(),
+            microwaveTransform = mat4.create(),
+            couchBaseTransform = mat4.create(),
+            cushion1Transform = mat4.create(),
+            cushion2Transform = mat4.create(),
+            cushion3Transform = mat4.create(),
+            backCushion1Transform = mat4.create(),
+            backCushion2Transform = mat4.create(),
+            backCushion3Transform = mat4.create(),
+            armrestLeftTransform = mat4.create(),
+            armrestRightTransform = mat4.create(),
+            trashCanTransform = mat4.create(),
+            wallOutletTransform = mat4.create(),
+            wallOutlet2Transform = mat4.create(),
+            PERSPECTIVE_PROJECTION = 'Perspective Projection',
+            ORTHOGRAPHIC_PROJECTION = 'Orthographic Projection',
+            projectionMode = PERSPECTIVE_PROJECTION;
+
+    function calculateCentroid(vertices) {
+      let x = 0, y = 0, z = 0;
+      for (let i = 0; i < vertices.length; i += 3) {
+        x += vertices[i];
+        y += vertices[i + 1];
+        z += vertices[i + 2];
+      }
+      const count = vertices.length / 3;
+      return [x / count, y / count, z / count];
+    }
+
+    function configure() {
+      const canvas = utils.getCanvas('webgl-canvas');
+      utils.autoResizeCanvas(canvas);
+
+      gl = utils.getGLContext(canvas);
+      gl.clearColor(0.9, 0.9, 0.9, 1);
+      gl.clearDepth(100);
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthFunc(gl.LEQUAL);
+
+      clock = new Clock();
+      program = new Program(gl, 'vertex-shader', 'fragment-shader');
+
+      const uniforms = [
+        'uProjectionMatrix',
+        'uModelViewMatrix',
+        'uNormalMatrix',
+        'uMaterialDiffuse',
+        'uLightAmbient',
+        'uLightDiffuse',
+        'uLightSpecular',
+        'uMaterialSpecular',
+        'uShininess',
+        'uLightPosition',
+        'uWireframe'
+      ];
+
+      const attributes = [
+        'aVertexPosition',
+        'aVertexColor',
+        'aVertexNormal'
+      ];
+
+      program.load(attributes, uniforms);
+
+      scene = new Scene(gl, program);
+      camera = new Camera(Camera.ORBITING_TYPE);
+      camera.goHome([0, 5, 0]);
+
+      new Controls(camera, canvas);
+
+      const fixedLightPosition = [0, 15, 0];
+      gl.uniform3fv(program.uLightPosition, fixedLightPosition);
+
+      gl.uniform4fv(program.uLightAmbient, [0.3, 0.3, 0.3, 1.0]);
+      gl.uniform4fv(program.uLightDiffuse, [1.5, 1.5, 1.5, 1.0]);
+      gl.uniform4fv(program.uLightSpecular, [1.5, 1.5, 1.5, 1.0]);
+
+      gl.uniform4fv(program.uMaterialSpecular, [0.5, 0.5, 0.5, 1.0]);
+      gl.uniform1f(program.uShininess, 20.0);
+
+      initTransforms();
+    }
+
+    function load() {
+      scene.add(new Floor(2000, 100));
+      scene.add(new Axis(2000));
+      drawRoom();
+    }
+
+    function drawRoom() {
+      drawRoomFloor();
+      drawCeiling();
+      drawWalls();
+      drawBroom();
+      drawDoor();
+      drawTable();
+      drawMicrowave();
+      drawCouchBase();
+      drawCushion1();
+      drawCushion2();
+      drawCushion3();
+      drawBackCushion1();
+      drawBackCushion2();
+      drawBackCushion3();
+      drawArmrestLeft();
+      drawArmrestRight();
+      drawTrashCan();
+      drawWallOutlet();
+      drawWallOutlet2();
+    }
+
+    function drawRoomFloor() {
+      const roomFloor = new RoomFloor(20, 20);
+      const floorTransform = mat4.create();
+      mat4.identity(floorTransform);
+      mat4.translate(floorTransform, floorTransform, [0, 0, 0]);
+      applyTransformToObject(roomFloor, floorTransform);
+      scene.add(roomFloor);
+    }
+
+    function drawCeiling() {
+      const ceiling = new Ceiling(20, 20);
+      const ceilingTransform = mat4.create();
+      mat4.identity(ceilingTransform);
+      mat4.translate(ceilingTransform, ceilingTransform, [0, 10, 0]);
+      applyTransformToObject(ceiling, ceilingTransform);
+      scene.add(ceiling);
+    }
+
+    function drawWalls() {
+      const leftWall = new Wall(20, 10, 'left-wall');
+      const leftWallTransform = mat4.create();
+      mat4.identity(leftWallTransform);
+      mat4.translate(leftWallTransform, leftWallTransform, [-10, 5, 0]);
+      mat4.rotateY(leftWallTransform, leftWallTransform, Math.PI / 2);
+      applyTransformToObject(leftWall, leftWallTransform);
+      scene.add(leftWall);
+
+      const backWall = new Wall(20, 10, 'back-wall');
+      const backWallTransform = mat4.create();
+      mat4.identity(backWallTransform);
+      mat4.translate(backWallTransform, backWallTransform, [0, 5, -10]);
+      applyTransformToObject(backWall, backWallTransform);
+      scene.add(backWall);
+    }
+
+    function drawBroom() {
+      const broom = new Broom();
+      mat4.identity(broomTransform);
+      mat4.translate(broomTransform, broomTransform, [-9.29, broom.brushHeight / 2, -9.7]);
+      mat4.rotateY(broomTransform, broomTransform, 30 * Math.PI / 180);
+      mat4.rotateX(broomTransform, broomTransform, -8 * Math.PI / 180);
+      mat4.rotateZ(broomTransform, broomTransform, 6 * Math.PI / 180);
+      applyTransformToObject(broom, broomTransform);
+      scene.add(broom);
+    }
+
+    function drawDoor() {
+      const door = new Door();
+      mat4.identity(doorTransform);
+      mat4.translate(doorTransform, doorTransform, [-6.5, door.height/2, -9.9]);
+      applyTransformToObject(door, doorTransform);
+      scene.add(door);
+    }
+
+    function drawTable() {
+      const table = new Table();
+      mat4.identity(tableTransform);
+      mat4.translate(tableTransform, tableTransform, [-1, 0, -9.0]);
+      applyTransformToObject(table, tableTransform);
+      scene.add(table);
+    }
+
+    function drawMicrowave() {
+      const microwave = new Microwave();
+      const table = new Table();
+      mat4.identity(microwaveTransform);
+      const tableTopY = table.height + microwave.height/2;
+      mat4.translate(microwaveTransform, microwaveTransform, [-1.2, tableTopY, -9.0]);
+      applyTransformToObject(microwave, microwaveTransform);
+      scene.add(microwave);
+    }
+
+    function drawCouchBase() {
+      const couchBase = new CouchBase();
+      mat4.identity(couchBaseTransform);
+      mat4.translate(couchBaseTransform, couchBaseTransform, [-8, couchBase.height / 2, 0]);
+      applyTransformToObject(couchBase, couchBaseTransform);
+      scene.add(couchBase);
+    }
+
+    function drawCushion1() {
+      const cushion = new CouchCushion();
+      mat4.identity(cushion1Transform);
+      mat4.translate(cushion1Transform, cushion1Transform, [-8, 1.2, -3.05]);
+      applyTransformToObject(cushion, cushion1Transform);
+      scene.add(cushion);
+    }
+
+    function drawCushion2() {
+      const cushion = new CouchCushion();
+      mat4.identity(cushion2Transform);
+      mat4.translate(cushion2Transform, cushion2Transform, [-8, 1.2, 0]);
+      applyTransformToObject(cushion, cushion2Transform);
+      scene.add(cushion);
+    }
+
+    function drawCushion3() {
+      const cushion = new CouchCushion();
+      mat4.identity(cushion3Transform);
+      mat4.translate(cushion3Transform, cushion3Transform, [-8, 1.2, 3.05]);
+      applyTransformToObject(cushion, cushion3Transform);
+      scene.add(cushion);
+    }
+
+    function drawBackCushion1() {
+      const cushion = new CouchBackCushion(0.8, 3, 4, 'couch-back-cushion-1');
+      mat4.identity(backCushion1Transform);
+      mat4.translate(backCushion1Transform, backCushion1Transform, [-9.6, 1.2, -1.6]);
+      applyTransformToObject(cushion, backCushion1Transform);
+      scene.add(cushion);
+    }
+
+    function drawBackCushion2() {
+      const cushion = new CouchBackCushion(0.9, 2.98, 4, 'couch-back-cushion-2');
+      mat4.identity(backCushion2Transform);
+      mat4.translate(backCushion2Transform, backCushion2Transform, [-9.6, 1.2, 2.3]);
+      applyTransformToObject(cushion, backCushion2Transform);
+      scene.add(cushion);
+    }
+
+    function drawBackCushion3() {
+      const cushion = new CouchBackCushion(0.8, 3, 4, 'couch-back-cushion-3');
+      mat4.identity(backCushion3Transform);
+      mat4.translate(backCushion3Transform, backCushion3Transform, [-9.6, 1.2, 5.6]);
+      applyTransformToObject(cushion, backCushion3Transform);
+      scene.add(cushion);
+    }
+
+    function drawArmrestLeft() {
+      const armrest = new CouchArmrestLeft();
+      mat4.identity(armrestLeftTransform);
+      mat4.translate(armrestLeftTransform, armrestLeftTransform, [-8.29, 0, -5]);
+      applyTransformToObject(armrest, armrestLeftTransform);
+      scene.add(armrest);
+    }
+
+    function drawArmrestRight() {
+      const armrest = new CouchArmrestRight();
+      mat4.identity(armrestRightTransform);
+      mat4.translate(armrestRightTransform, armrestRightTransform, [-8.3, 0, 5]);
+      applyTransformToObject(armrest, armrestRightTransform);
+      scene.add(armrest);
+    }
+
+    function drawTrashCan() {
+      const trashCan = new TrashCan(1.2, 1.2, 2, 0.8, 32, 0.1);
+      mat4.identity(trashCanTransform);
+      mat4.translate(trashCanTransform, trashCanTransform, [1.5, 0, -9]);
+      applyTransformToObject(trashCan, trashCanTransform);
+      scene.add(trashCan);
+    }
+
+    function drawWallOutlet() {
+      const wallOutlet = new WallOutlet();
+      mat4.identity(wallOutletTransform);
+      mat4.translate(wallOutletTransform, wallOutletTransform, [4.5, 1.5, -9.95]);
+      applyTransformToObject(wallOutlet, wallOutletTransform);
+      scene.add(wallOutlet);
+    }
+
+    function drawWallOutlet2() {
+      const wallOutlet = new WallOutlet();
+      mat4.identity(wallOutlet2Transform);
+      mat4.translate(wallOutlet2Transform, wallOutlet2Transform, [-9.95, 1.5, 7.2]);
+      mat4.rotateY(wallOutlet2Transform, wallOutlet2Transform, Math.PI / 2);
+      applyTransformToObject(wallOutlet, wallOutlet2Transform);
+      scene.add(wallOutlet);
+    }
+
+    function applyTransformToObject(object, transform) {
+      const transformedVertices = [];
+      const transformedNormals = [];
+
+      for (let i = 0; i < object.vertices.length; i += 3) {
+        const vertex = vec4.fromValues(object.vertices[i], object.vertices[i + 1], object.vertices[i + 2], 1);
+        vec4.transformMat4(vertex, vertex, transform);
+        transformedVertices.push(vertex[0], vertex[1], vertex[2]);
+      }
+
+      const normalMatrix = mat4.create();
+      mat4.invert(normalMatrix, transform);
+      mat4.transpose(normalMatrix, normalMatrix);
+
+      for (let i = 0; i < object.normals.length; i += 3) {
+        const normal = vec4.fromValues(object.normals[i], object.normals[i + 1], object.normals[i + 2], 0);
+        vec4.transformMat4(normal, normal, normalMatrix);
+        transformedNormals.push(normal[0], normal[1], normal[2]);
+      }
+
+      object.vertices = transformedVertices;
+      object.normals = transformedNormals;
+    }
+
+    function initTransforms() {
+      modelViewMatrix = camera.getViewTransform();
+      mat4.identity(projectionMatrix);
+      updateTransforms();
+      mat3.fromMat4(normalMatrix, modelViewMatrix);
+      mat3.invert(normalMatrix, normalMatrix);
+      mat3.transpose(normalMatrix, normalMatrix);
+    }
+
+    function updateTransforms() {
+      const { width, height } = gl.canvas;
+      if (projectionMode === PERSPECTIVE_PROJECTION) {
+        mat4.perspective(projectionMatrix, fov, width / height, 1, 5000);
+      } else {
+        mat4.ortho(projectionMatrix, -width / fov, width / fov, -height / fov, height / fov, -5000, 5000);
+      }
+    }
+
+    function setMatrixUniforms() {
+      gl.uniformMatrix4fv(program.uModelViewMatrix, false, camera.getViewTransform());
+      gl.uniformMatrix4fv(program.uProjectionMatrix, false, projectionMatrix);
+      gl.uniformMatrix3fv(program.uNormalMatrix, false, normalMatrix);
+    }
+
+    function draw() {
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      try {
+        updateTransforms();
+        setMatrixUniforms();
+
+        scene.traverse(object => {
+          if (object.alias === 'broom') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.0, 0.0, 1.0, 1.0]);
+            gl.uniform4fv(program.uMaterialSpecular, [0.2, 0.2, 0.2, 1.0]);
+            gl.uniform1f(program.uShininess, 10.0);
+            } else if (object.alias === 'room-floor') {
+              gl.uniform4fv(program.uMaterialDiffuse, [15, 10.5, 4.5, 1.0]);
+              gl.uniform4fv(program.uMaterialSpecular, [0.2, 0.2, 0.2, 1.0]);
+              gl.uniform1f(program.uShininess, 4.0);
+          } else if (object.alias === 'ceiling') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.95, 0.95, 0.9, 1.0]);
+            gl.uniform4fv(program.uMaterialSpecular, [0.1, 0.1, 0.1, 1.0]);
+            gl.uniform1f(program.uShininess, 5.0);
+          } else if (object.alias === 'left-wall' || object.alias === 'back-wall') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.9, 0.9, 0.85, 1.0]);
+            gl.uniform4fv(program.uMaterialSpecular, [0.1, 0.1, 0.1, 1.0]);
+            gl.uniform1f(program.uShininess, 5.0);
+          } else if (object.alias === 'door') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.5, 0.3, 0.1, 1.0]);
+            gl.uniform4fv(program.uMaterialSpecular, [0.2, 0.2, 0.2, 1.0]);
+            gl.uniform1f(program.uShininess, 10.0);
+          } else if (object.alias === 'table') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.2, 0.2, 0.2, 1.0]);
+            gl.uniform4fv(program.uMaterialSpecular, [0.2, 0.2, 0.2, 1.0]);
+            gl.uniform1f(program.uShininess, 10.0);
+          } else if (object.alias === 'microwave') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.1, 0.1, 0.1, 1.0]);
+            gl.uniform4fv(program.uMaterialSpecular, [0.8, 0.8, 0.8, 1.0]);
+            gl.uniform1f(program.uShininess, 50.0);
+          } else if (object.alias === 'couch-base') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.5, 0.3, 0.1, 1.0]);
+            gl.uniform4fv(program.uMaterialSpecular, [0.3, 0.3, 0.3, 1.0]);
+            gl.uniform1f(program.uShininess, 15.0);
+          } else if (object.alias === 'couch-cushion') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.5, 0.3, 0.1, 1.0]);
+            gl.uniform4fv(<program className="uMaterialS"></program>pecular, [0.3, 0.3, 0.3, 1.0]);
+            gl.uniform1f(program.uShininess, 15.0);
+          } else if (object.alias === 'couch-back-cushion-1' || object.alias === 'couch-back-cushion-2' || object.alias === 'couch-back-cushion-3') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.5, 0.3, 0.1, 1.0]);
+            gl.uniform4fv(program.uMaterialSpecular, [0.3, 0.3, 0.3, 1.0]);
+            gl.uniform1f(program.uShininess, 2.0);
+          } else if (object.alias === 'couch-armrest-left' || object.alias === 'couch-armrest-right') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.5, 0.3, 0.1, 1.0]);
+            gl.uniform4fv(program.uMaterialSpecular, [0.3, 0.3, 0.3, 1.0]);
+            gl.uniform1f(program.uShininess, 15.0);
+          } else if (object.alias === 'trash-can') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.0, 0.0, 0.0, 1.0]);
+            gl.uniform4fv(program.uMaterialSpecular, [0.5, 0.5, 0.5, 1.0]);
+            gl.uniform1f(program.uShininess, 20.0);
+          } else if (object.alias === 'wall-outlet') {
+            gl.uniform4fv(program.uMaterialDiffuse, [0.95, 0.9, 0.8, 1.0]);
+            gl.uniform4fv(program.uMaterialSpecular, [0.2, 0.2, 0.2, 1.0]);
+            gl.uniform1f(program.uShininess, 10.0);
+          } else {
+            gl.uniform4fv(program.uMaterialDiffuse, object.diffuse);
+            gl.uniform4fv(program.uMaterialSpecular, [0.5, 0.5, 0.5, 1.0]);
+            gl.uniform1f(program.uShininess, 20.0);
+          }
+
+          gl.uniform1i(program.uWireframe, object.wireframe);
+
+          gl.bindVertexArray(object.vao);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, object.ibo);
+
+          if (object.wireframe) {
+            gl.drawElements(gl.LINES, object.indices.length, gl.UNSIGNED_SHORT, 0);
+          } else {
+            gl.drawElements(gl.TRIANGLES, object.indices.length, gl.UNSIGNED_SHORT, 0);
+          }
+
+          gl.bindVertexArray(null);
+          gl.bindBuffer(gl.ARRAY_BUFFER, null);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    function init() {
+      configure();
+      load();
+      clock.on('tick', draw);
+      initControls();
+    }
+
+    window.onload = init;
+
+    function initControls() {
+      utils.configureControls({
+        'Camera Type': {
+          value: camera.type,
+          options: [Camera.TRACKING_TYPE, Camera.ORBITING_TYPE],
+          onChange: v => {
+            camera.goHome();
+            camera.setType(v);
+          }
+        },
+        'Projection Mode': {
+          value: projectionMode,
+          options: [PERSPECTIVE_PROJECTION, ORTHOGRAPHIC_PROJECTION],
+          onChange: v => projectionMode = v
+        },
+        fov: {
+          value: fov,
+          min: 1, max: 200, step: 1,
+          onChange: v => fov = v
+        },
+        Dolly: {
+          value: 0,
+          min: -100, max: 100, step: 0.1,
+          onChange: v => camera.dolly(v)
+        },
+        Position: {
+          ...['X', 'Y', 'Z'].reduce((result, name, i) => {
+            result[name] = {
+              value: camera.position[i],
+              min: -200, max: 200, step: 0.1,
+              onChange: (v, state) => {
+                camera.setPosition([state.X, state.Y, state.Z]);
+              }
+            };
+            return result;
+          }, {}),
+        },
+        Rotation: {
+          Elevation: {
+            value: camera.elevation,
+            min: -180, max: 180, step: 0.1,
+            onChange: v => camera.setElevation(v)
+          },
+          Azimuth: {
+            value: camera.azimuth,
+            min: -180, max: 180, step: 0.1,
+            onChange: v => camera.setAzimuth(v)
+          }
+        },
+        'Static Light Position': {
+          value: fixedLight,
+          onChange: v => {
+            fixedLight = v;
+          }
+        },
+        'Go Home': () => camera.goHome(),
+        'Front View': () => {
+          camera.setType(Camera.ORBITING_TYPE);
+          camera.setPosition([0, 5, 9.9]);
+          camera.setAzimuth(-90);
+          camera.setElevation(0);
+        },
+        'Side View': () => {
+          camera.setType(Camera.ORBITING_TYPE);
+          camera.setPosition([9.9, 5, 0]);
+          camera.setAzimuth(180);
+          camera.setElevation(0);
+        },
+        'Top View': () => {
+          camera.setType(Camera.ORBITING_TYPE);
+          camera.setPosition([0, 5, -9.9]);
+          camera.setAzimuth(90);
+          camera.setElevation(0);
+        }
+      });
+
+      clock.on('tick', () => {
+        camera.matrix.forEach((data, i) => {
+          document.getElementById(`m${i}`).innerText = data.toFixed(1);
+        });
+      });
+    }
+  </script>
+</head>
+
+<body>
+<canvas id="webgl-canvas">
+  Your browser does not support the HTML5 canvas element.
+</canvas>
+
+<div id="info">
+  <p>Camera Matrix</p>
+  <table id="matrix">
+    <tr>
+      <td id="m0"></td>
+      <td id="m4"></td>
+      <td id="m8"></td>
+      <td id="m12"></td>
+    </tr>
+    <tr>
+      <td id="m1"></td>
+      <td id="m5"></td>
+      <td id="m9"></td>
+      <td id="m13"></td>
+    </tr>
+    <tr>
+      <td id="m2"></td>
+      <td id="m6"></td>
+      <td id="m10"></td>
+      <td id="m14"></td>
+    </tr>
+    <tr>
+      <td id="m3"></td>
+      <td id="m7"></td>
+      <td id="m11"></td>
+      <td id="m15"></td>
+    </tr>
+  </table>
+</div>
+</body>
+</html>
