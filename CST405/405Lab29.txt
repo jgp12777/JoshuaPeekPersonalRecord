@@ -1,0 +1,10 @@
+﻿Reflect on the entire compiler project. Discuss three things you would have done differently given your current knowledge. Of the three things, one should relate to the compiler design, the second to features of the language, and the third to the code implementation.
+
+
+Compiler design: I would have implemented a more modular IR with multiple optimization passes between the parser and code generator, allowing for better separation of concerns and easier addition of new optimizations rather than attempting optimizations directly during code generation.
+
+
+Language features: I would have included support for arrays and pointers from the beginning rather than adding them later, as not having them made more things complicated.
+
+
+Code implementation: I would have written comprehensive unit tests for each compiler phase (lexer, parser, semantic analyzer, code generator) from earlier on in the project instead of relying primarily on waiting for the program to run or fail, which would have made debugging much faster and prevented regression errors when adding new features.
