@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+.mockup { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border: 2px solid #333; }
+.title { text-align: center; font-size: 48px; font-weight: bold; background: linear-gradient(135deg, #00d9ff, #ff006e); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px; }
+.subtitle { text-align: center; font-size: 12px; color: #666; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 2px; }
+.dashboard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+.stat-box { background: #1a1f3a; border: 1px solid #00d9ff; border-radius: 8px; padding: 15px; text-align: center; color: white; }
+.stat-label { font-size: 10px; color: #8892b0; margin-bottom: 5px; }
+.stat-value { font-size: 24px; color: #00d9ff; font-weight: bold; }
+.difficulty { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+.diff-btn { padding: 10px 20px; background: #1a1f3a; color: white; border: 1px solid #00d9ff; border-radius: 5px; font-size: 12px; }
+.diff-btn.active { background: linear-gradient(135deg, #00d9ff, #ff006e); border: none; }
+.board-container { display: flex; justify-content: center; margin: 20px 0; }
+.board { display: grid; grid-template-columns: repeat(8, 50px); grid-template-rows: repeat(8, 50px); border: 3px solid #00d9ff; }
+.square { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; }
+.light { background: #f0d9b5; }
+.dark { background: #b58863; }
+.piece { width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.red { background: radial-gradient(circle at 30% 30%, #ff4757, #c0392b); border: 2px solid #8e2a2a; }
+.black { background: radial-gradient(circle at 30% 30%, #2c3e50, #1a1a1a); border: 2px solid #000; }
+.king::before { content: '♔'; color: gold; }
+.message { text-align: center; font-size: 16px; margin: 15px 0; font-weight: bold; color: #00d9ff; }
+.reset-btn { display: block; margin: 0 auto; padding: 15px 40px; background: linear-gradient(135deg, #00d9ff, #ff006e); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; }
+.info-panel { background: #1a1f3a; border: 1px solid #00d9ff; border-radius: 8px; padding: 15px; margin-top: 20px; color: white; font-size: 12px; line-height: 1.6; }
+.info-title { color: #00d9ff; font-weight: bold; margin-bottom: 10px; }
+.label { position: absolute; background: #ff006e; color: white; padding: 3px 8px; border-radius: 3px; font-size: 10px; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="mockup">
+<div style="position: relative;">
+<div class="label" style="top: 0; left: 50%; transform: translateX(-50%);">TITLE HEADER</div>
+<div class="title">CHECKERS</div>
+<div class="subtitle">Powered by Minimax Algorithm with Multi-Jump Support</div>
+</div>
+
+<div style="position: relative; margin-top: 20px;">
+<div class="label" style="top: -15px; left: 0;">ANALYTICS DASHBOARD</div>
+<div class="dashboard">
+<div class="stat-box">
+<div class="stat-label">RED PIECES</div>
+<div class="stat-value">12</div>
+</div>
+<div class="stat-box">
+<div class="stat-label">BLACK PIECES</div>
+<div class="stat-value">12</div>
+</div>
+<div class="stat-box">
+<div class="stat-label">POSITIONS EVALUATED</div>
+<div class="stat-value">0</div>
+</div>
+<div class="stat-box">
+<div class="stat-label">AI THINK TIME</div>
+<div class="stat-value">0ms</div>
+</div>
+</div>
+</div>
+
+<div style="position: relative;">
+<div class="label" style="top: -10px; left: 50%; transform: translateX(-50%);">DIFFICULTY SELECTOR</div>
+<div class="difficulty">
+<div class="diff-btn">BEGINNER</div>
+<div class="diff-btn active">EASY</div>
+<div class="diff-btn">MEDIUM</div>
+<div class="diff-btn">HARD</div>
+</div>
+</div>
+
+<div style="position: relative;">
+<div class="label" style="top: 10px; left: 50%; transform: translateX(-50%);">8×8 GAME BOARD</div>
+<div class="board-container">
+<div class="board">
+<div class="square light"></div>
+<div class="square dark"><div class="piece black"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece black"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece black"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece black"></div></div>
+
+<div class="square dark"><div class="piece black"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece black"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece black"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece black"></div></div>
+<div class="square light"></div>
+
+<div class="square light"></div>
+<div class="square dark"><div class="piece black"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece black"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece black"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece black"></div></div>
+
+<div class="square dark"></div>
+<div class="square light"></div>
+<div class="square dark"></div>
+<div class="square light"></div>
+<div class="square dark"></div>
+<div class="square light"></div>
+<div class="square dark"></div>
+<div class="square light"></div>
+
+<div class="square light"></div>
+<div class="square dark"></div>
+<div class="square light"></div>
+<div class="square dark"></div>
+<div class="square light"></div>
+<div class="square dark"></div>
+<div class="square light"></div>
+<div class="square dark"></div>
+
+<div class="square dark"><div class="piece red"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece red"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece red"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece red"></div></div>
+<div class="square light"></div>
+
+<div class="square light"></div>
+<div class="square dark"><div class="piece red"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece red"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece red"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece red"></div></div>
+
+<div class="square dark"><div class="piece red king"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece red"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece red"></div></div>
+<div class="square light"></div>
+<div class="square dark"><div class="piece red"></div></div>
+<div class="square light"></div>
+</div>
+</div>
+</div>
+
+<div style="position: relative;">
+<div class="label" style="top: 0; left: 50%; transform: translateX(-50%);">STATUS MESSAGE</div>
+<div class="message">Your turn! Click a red piece to move</div>
+</div>
+
+<div style="position: relative;">
+<div class="label" style="top: 5px; left: 50%; transform: translateX(-50%);">RESET BUTTON</div>
+<button class="reset-btn">NEW GAME</button>
+</div>
+
+<div style="position: relative;">
+<div class="label" style="top: 10px; left: 0;">ALGORITHM INFO PANEL</div>
+<div class="info-panel">
+<div class="info-title">Game Rules & Algorithm Details:</div>
+<p><strong>Multi-Jump Rule:</strong> When you capture an opponent's piece, if another jump is available, you MUST continue jumping.</p>
+<p><strong>Difficulty Levels:</strong> Beginner (depth 1, 40% random), Easy (depth 2), Medium (depth 4), Hard (depth 6).</p>
+<p><strong>Minimax with Alpha-Beta Pruning:</strong> Explores future game states to choose optimal moves.</p>
+</div>
+</div>
+</div>
+</body>
+</html>

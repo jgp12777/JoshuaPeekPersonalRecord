@@ -1,0 +1,43 @@
+flowchart TD
+    Start([Current Game State]) --> Init[Initialize Population<br/>Random move sequences]
+    Init --> ReservTree[Create Reservation Tree<br/>Store evaluated positions]
+    
+    ReservTree --> GenLoop{Generation < Max?}
+    
+    GenLoop -->|Yes| Selection[Selection<br/>Choose parent chromosomes<br/>by fitness]
+    Selection --> Crossover[Crossover<br/>Exchange move subsequences<br/>at random point]
+    Crossover --> Mutation[Mutation<br/>Randomly change moves<br/>in sequences]
+    Mutation --> Evaluate[Evaluate Offspring<br/>Simulate sequences on board]
+    
+    Evaluate --> UpdateTree[Update Reservation Tree<br/>Insert new positions<br/>Propagate minimax values]
+    UpdateTree --> Fitness[Calculate Fitness<br/>Height leaf value reaches<br/>in reservation tree]
+    
+    Fitness --> NextGen[Form Next Generation<br/>Keep high-fitness<br/>chromosomes]
+    NextGen --> GenLoop
+    
+    GenLoop -->|No| Best[Select Best Chromosome<br/>Highest fitness value]
+    Best --> Extract[Extract First Move<br/>from best sequence]
+    Extract --> Output([Play Move])
+    
+    style Start fill:#00d9ff,stroke:#fff,color:#000
+    style Output fill:#ff006e,stroke:#fff,color:#fff
+    style ReservTree fill:#ffd700,stroke:#000,color:#000
+    style UpdateTree fill:#ffd700,stroke:#000,color:#000
+    style Fitness fill:#90EE90,stroke:#000,color:#000
+    style Best fill:#ff006e,stroke:#fff,color:#fff
+    
+    subgraph "Chromosome Encoding"
+        direction LR
+        C1[Move 1] --> C2[Move 2] --> C3[Move 3] --> C4[Move 4]
+    end
+    
+    subgraph "Reservation Tree Structure"
+        direction TB
+        Root[Root: Value=5] --> R1[Level 1: MAX]
+        Root --> R2[Level 1: MAX]
+        Root --> R3[Level 1: MAX]
+        R1 --> L1[Leaf: 3]
+        R1 --> L2[Leaf: 5]
+        R2 --> L3[Leaf: 2]
+        R2 --> L4[Leaf: 7]
+    end

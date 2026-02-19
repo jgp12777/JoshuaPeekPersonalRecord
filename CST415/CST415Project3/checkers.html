@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkers: Minimax AI</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght:700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --neon-blue: #00d9ff;
+            --neon-pink: #ff006e;
+            --dark-bg: #0a0e27;
+            --grid-dark: #1a1f3a;
+            --text-light: #e0e0e0;
+            --light-square: #f0d9b5;
+            --dark-square: #b58863;
+        }
+        
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0a0e27 100%);
+            background-attachment: fixed;
+            color: var(--text-light);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 30%, rgba(0, 217, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(255, 0, 110, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1000px;
+            width: 100%;
+        }
+        
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3.5rem;
+            font-weight: 900;
+            text-align: center;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: glow-pulse 3s ease-in-out infinite;
+        }
+        
+        @keyframes glow-pulse {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.3); }
+        }
+        
+        .subtitle {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #8892b0;
+            margin-bottom: 2rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        .dashboard {
+            background: rgba(26, 31, 58, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .stat-box {
+            background: rgba(10, 14, 39, 0.8);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .stat-box:hover {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: #8892b0;
+            margin-bottom: 0.5rem;
+            letter-spacing: 1px;
+        }
+        
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: var(--neon-blue);
+        }
+        
+        .stat-value.thinking {
+            color: var(--neon-pink);
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50%, 100% { opacity: 1; }
+            25%, 75% { opacity: 0.5; }
+        }
+        
+        .game-area {
+            background: rgba(26, 31, 58, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 15px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        .difficulty-selector {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            justify-content: center;
+        }
+        
+        .diff-btn {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(10, 14, 39, 0.8);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            color: var(--text-light);
+            padding: 0.7rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .diff-btn:hover {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 15px rgba(0, 217, 255, 0.4);
+        }
+        
+        .diff-btn.active {
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-pink));
+            border-color: transparent;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 0 20px rgba(0, 217, 255, 0.6);
+        }
+        
+        .board-container {
+            display: flex;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+        
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 0;
+            max-width: 600px;
+            width: 100%;
+            aspect-ratio: 1;
+            border: 3px solid rgba(0, 217, 255, 0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(0, 217, 255, 0.3);
+        }
+        
+        .square {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .square.light {
+            background: #f0d9b5;
+        }
+        
+        .square.dark {
+            background: #b58863;
+        }
+        
+        .square.selected {
+            box-shadow: inset 0 0 20px rgba(0, 217, 255, 0.6);
+            border: 2px solid var(--neon-blue);
+        }
+        
+        .square.valid-move {
+            background: rgba(0, 217, 255, 0.3) !important;
+            cursor: pointer;
+        }
+        
+        .square.valid-move::after {
+            content: '';
+            position: absolute;
+            width: 30%;
+            height: 30%;
+            background: rgba(0, 217, 255, 0.5);
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+        
+        .square.multi-jump {
+            background: rgba(255, 215, 0, 0.4) !important;
+        }
+        
+        .square.multi-jump::after {
+            content: '';
+            position: absolute;
+            width: 30%;
+            height: 30%;
+            background: rgba(255, 215, 0, 0.7);
+            border-radius: 50%;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.3); opacity: 1; }
+        }
+        
+        .piece {
+            width: 70%;
+            height: 70%;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            animation: pieceAppear 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        
+        @keyframes pieceAppear {
+            0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+            50% { transform: scale(1.2) rotate(10deg); }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        
+        .piece.red {
+            background: radial-gradient(circle at 30% 30%, #ff4757, #c0392b);
+            border: 3px solid #8e2a2a;
+            color: white;
+        }
+        
+        .piece.black {
+            background: radial-gradient(circle at 30% 30%, #2c3e50, #1a1a1a);
+            border: 3px solid #000;
+            color: #ddd;
+        }
+        
+        .piece.king::before {
+            content: '♔';
+            font-size: 2rem;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+            color: gold;
+        }
+        
+        .piece:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.5);
+        }
+        
+        .message {
+            text-align: center;
+            font-size: 1.2rem;
+            margin: 1.5rem 0;
+            min-height: 2rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        
+        .message.win {
+            color: var(--neon-blue);
+            text-shadow: 0 0 10px var(--neon-blue);
+        }
+        
+        .message.lose {
+            color: var(--neon-pink);
+            text-shadow: 0 0 10px var(--neon-pink);
+        }
+        
+        .message.multi-jump-notice {
+            color: gold;
+            text-shadow: 0 0 10px gold;
+        }
+        
+        .reset-btn {
+            font-family: 'JetBrains Mono', monospace;
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-pink));
+            border: none;
+            color: white;
+            padding: 1rem 2.5rem;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: block;
+            margin: 0 auto;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 217, 255, 0.4);
+        }
+        
+        .reset-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 217, 255, 0.6);
+        }
+        
+        .reset-btn:active {
+            transform: translateY(0);
+        }
+        
+        .algorithm-info {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: rgba(10, 14, 39, 0.6);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 10px;
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+        
+        .algorithm-info h3 {
+            color: var(--neon-blue);
+            font-family: 'Orbitron', sans-serif;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+        
+        .algorithm-info code {
+            background: rgba(0, 217, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: var(--neon-pink);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+            
+            .dashboard {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .board {
+                max-width: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CHECKERS</h1>
+        <div class="subtitle">Powered by Minimax Algorithm with Multi-Jump Support</div>
+        
+        <div class="dashboard">
+            <div class="stat-box">
+                <div class="stat-label">Red Pieces</div>
+                <div class="stat-value" id="redPieces">12</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Black Pieces</div>
+                <div class="stat-value" id="blackPieces">12</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Positions Evaluated</div>
+                <div class="stat-value" id="positions">0</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">AI Think Time</div>
+                <div class="stat-value" id="thinkTime">0ms</div>
+            </div>
+        </div>
+        
+        <div class="game-area">
+            <div class="difficulty-selector">
+                <button class="diff-btn" data-depth="1" data-random="0.4">Beginner</button>
+                <button class="diff-btn active" data-depth="2" data-random="0">Easy</button>
+                <button class="diff-btn" data-depth="4" data-random="0">Medium</button>
+                <button class="diff-btn" data-depth="6" data-random="0">Hard</button>
+            </div>
+            
+            <div class="board-container">
+                <div class="board" id="board"></div>
+            </div>
+            
+            <div class="message" id="message">Your turn! Click a red piece to move</div>
+            
+            <button class="reset-btn" id="resetBtn">New Game</button>
+            
+            <div class="algorithm-info">
+                <h3>Game Rules & Algorithm Details:</h3>
+                <p><strong>Multi-Jump Rule:</strong> When you capture an opponent's piece, if another jump is available with the same piece, you MUST continue jumping. This creates chain captures!</p>
+                <p><strong>Difficulty Levels:</strong> Beginner (depth 1, 40% random moves), Easy (depth 2), Medium (depth 4), Hard (depth 6). Higher depths evaluate exponentially more positions.</p>
+                <p><strong>Minimax with Alpha-Beta Pruning:</strong> The AI explores future game states and chooses moves that maximize its advantage while minimizing yours.</p>
+                <p><strong>Evaluation Function:</strong> Considers piece count and king value. Higher difficulties also factor in position, advancement, and board control.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const RED = 'red';
+        const BLACK = 'black';
+        const EMPTY = null;
+        
+        let board = [];
+        let selectedPiece = null;
+        let validMoves = [];
+        let currentPlayer = RED;
+        let gameActive = true;
+        let searchDepth = 2;
+        let randomness = 0;
+        let positionsEvaluated = 0;
+        let multiJumpInProgress = false;
+        let currentJumpingPiece = null;
+        
+        const boardElement = document.getElementById('board');
+        const message = document.getElementById('message');
+        const resetBtn = document.getElementById('resetBtn');
+        const diffBtns = document.querySelectorAll('.diff-btn');
+        const positionsDisplay = document.getElementById('positions');
+        const thinkTimeDisplay = document.getElementById('thinkTime');
+        const redPiecesDisplay = document.getElementById('redPieces');
+        const blackPiecesDisplay = document.getElementById('blackPieces');
+        
+        // Initialize game
+        function initBoard() {
+            board = [];
+            for (let row = 0; row < 8; row++) {
+                board[row] = [];
+                for (let col = 0; col < 8; col++) {
+                    if ((row + col) % 2 === 1) {
+                        if (row < 3) {
+                            board[row][col] = { player: BLACK, king: false };
+                        } else if (row > 4) {
+                            board[row][col] = { player: RED, king: false };
+                        } else {
+                            board[row][col] = EMPTY;
+                        }
+                    } else {
+                        board[row][col] = EMPTY;
+                    }
+                }
+            }
+        }
+        
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const square = document.createElement('div');
+                    square.className = 'square';
+                    square.className += (row + col) % 2 === 0 ? ' light' : ' dark';
+                    square.dataset.row = row;
+                    square.dataset.col = col;
+                    
+                    const piece = board[row][col];
+                    if (piece) {
+                        const pieceDiv = document.createElement('div');
+                        pieceDiv.className = `piece ${piece.player}`;
+                        if (piece.king) pieceDiv.classList.add('king');
+                        square.appendChild(pieceDiv);
+                    }
+                    
+                    square.addEventListener('click', handleSquareClick);
+                    boardElement.appendChild(square);
+                }
+            }
+            updatePieceCounts();
+        }
+        
+        function updatePieceCounts() {
+            let redCount = 0;
+            let blackCount = 0;
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = board[row][col];
+                    if (piece) {
+                        if (piece.player === RED) redCount++;
+                        else blackCount++;
+                    }
+                }
+            }
+            redPiecesDisplay.textContent = redCount;
+            blackPiecesDisplay.textContent = blackCount;
+        }
+        
+        function handleSquareClick(e) {
+            if (!gameActive || currentPlayer !== RED) return;
+            
+            const square = e.currentTarget;
+            const row = parseInt(square.dataset.row);
+            const col = parseInt(square.dataset.col);
+            
+            // Check if clicking a valid move
+            const validMove = validMoves.find(m => m.endRow === row && m.endCol === col);
+            if (validMove) {
+                // Execute just the single move/jump
+                executeSingleMove(validMove);
+                renderBoard();
+                
+                // Check for multi-jump continuation
+                if (validMove.isJump) {
+                    const continueJumps = getJumpsOnly(validMove.endRow, validMove.endCol, board);
+                    if (continueJumps.length > 0) {
+                        // Multi-jump available - must continue
+                        multiJumpInProgress = true;
+                        currentJumpingPiece = { row: validMove.endRow, col: validMove.endCol };
+                        selectPiece(validMove.endRow, validMove.endCol);
+                        message.textContent = '⚡ Multi-Jump! Continue jumping with this piece';
+                        message.classList.add('multi-jump-notice');
+                        return;
+                    }
+                }
+                
+                // No multi-jump or completed all jumps
+                multiJumpInProgress = false;
+                currentJumpingPiece = null;
+                clearSelection();
+                currentPlayer = currentPlayer === RED ? BLACK : RED;
+                checkGameOver();
+                
+                if (gameActive) {
+                    setTimeout(() => aiMove(), 500);
+                }
+                return;
+            }
+            
+            // Select piece (only if not in multi-jump, or selecting the jumping piece)
+            const piece = board[row][col];
+            if (piece && piece.player === RED) {
+                if (multiJumpInProgress) {
+                    // Can only select the piece that's mid-jump
+                    if (currentJumpingPiece && row === currentJumpingPiece.row && col === currentJumpingPiece.col) {
+                        selectPiece(row, col);
+                    }
+                } else {
+                    selectPiece(row, col);
+                }
+            } else {
+                if (!multiJumpInProgress) {
+                    clearSelection();
+                }
+            }
+        }
+        
+        function selectPiece(row, col) {
+            clearSelection();
+            selectedPiece = { row, col };
+            
+            if (multiJumpInProgress) {
+                // Only show continuing jumps
+                validMoves = getJumpsOnly(row, col, board);
+            } else {
+                validMoves = getValidMoves(row, col, board);
+            }
+            
+            // Highlight selected piece
+            const squares = document.querySelectorAll('.square');
+            squares[row * 8 + col].classList.add('selected');
+            
+            // Highlight valid moves
+            validMoves.forEach(move => {
+                const sq = squares[move.endRow * 8 + move.endCol];
+                sq.classList.add('valid-move');
+                if (multiJumpInProgress) {
+                    sq.classList.add('multi-jump');
+                }
+            });
+        }
+        
+        function clearSelection() {
+            selectedPiece = null;
+            if (!multiJumpInProgress) {
+                validMoves = [];
+            }
+            document.querySelectorAll('.selected, .valid-move, .multi-jump').forEach(sq => {
+                sq.classList.remove('selected', 'valid-move', 'multi-jump');
+            });
+            if (!multiJumpInProgress) {
+                message.classList.remove('multi-jump-notice');
+            }
+        }
+        
+        function getJumpsOnly(row, col, boardState) {
+            const piece = boardState[row][col];
+            if (!piece) return [];
+            
+            const jumps = [];
+            const directions = piece.king ? 
+                [[-1, -1], [-1, 1], [1, -1], [1, 1]] : 
+                piece.player === RED ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
+            
+            for (const [dr, dc] of directions) {
+                const jumpRow = row + dr * 2;
+                const jumpCol = col + dc * 2;
+                const midRow = row + dr;
+                const midCol = col + dc;
+                
+                if (jumpRow >= 0 && jumpRow < 8 && jumpCol >= 0 && jumpCol < 8) {
+                    const midPiece = boardState[midRow][midCol];
+                    const destPiece = boardState[jumpRow][jumpCol];
+                    
+                    if (midPiece && midPiece.player !== piece.player && !destPiece) {
+                        jumps.push({
+                            startRow: row,
+                            startCol: col,
+                            endRow: jumpRow,
+                            endCol: jumpCol,
+                            capturedRow: midRow,
+                            capturedCol: midCol,
+                            isJump: true
+                        });
+                    }
+                }
+            }
+            
+            return jumps;
+        }
+        
+        function getValidMoves(row, col, boardState) {
+            const piece = boardState[row][col];
+            if (!piece) return [];
+            
+            // Check for jumps first
+            const jumps = getJumpsOnly(row, col, boardState);
+            if (jumps.length > 0) return jumps;
+            
+            // Regular moves only if no jumps available
+            const moves = [];
+            const directions = piece.king ? 
+                [[-1, -1], [-1, 1], [1, -1], [1, 1]] : 
+                piece.player === RED ? [[-1, -1], [-1, 1]] : [[1, -1], [1, 1]];
+            
+            for (const [dr, dc] of directions) {
+                const newRow = row + dr;
+                const newCol = col + dc;
+                
+                if (newRow >= 0 && newRow < 8 && newCol >= 0 && newCol < 8) {
+                    if (!boardState[newRow][newCol]) {
+                        moves.push({
+                            startRow: row,
+                            startCol: col,
+                            endRow: newRow,
+                            endCol: newCol,
+                            isJump: false
+                        });
+                    }
+                }
+            }
+            
+            return moves;
+        }
+        
+        function getAllMoves(player, boardState) {
+            const moves = [];
+            const jumps = [];
+            
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = boardState[row][col];
+                    if (piece && piece.player === player) {
+                        const pieceMoves = getValidMoves(row, col, boardState);
+                        pieceMoves.forEach(move => {
+                            if (move.isJump) {
+                                // Expand multi-jumps into complete sequences
+                                const sequences = expandMultiJumps(move, boardState);
+                                jumps.push(...sequences);
+                            } else {
+                                moves.push(move);
+                            }
+                        });
+                    }
+                }
+            }
+            
+            return jumps.length > 0 ? jumps : moves;
+        }
+        
+        function expandMultiJumps(initialJump, boardState) {
+            const sequences = [];
+            
+            function explore(moveSequence, currentBoard) {
+                const lastMove = moveSequence[moveSequence.length - 1];
+                const continueJumps = getJumpsOnly(lastMove.endRow, lastMove.endCol, currentBoard);
+                
+                if (continueJumps.length === 0) {
+                    // No more jumps - this is a complete sequence
+                    sequences.push({
+                        ...moveSequence[0],
+                        isMultiJump: moveSequence.length > 1,
+                        jumpSequence: moveSequence,
+                        captureCount: moveSequence.length
+                    });
+                    return;
+                }
+                
+                // Continue with each possible jump
+                for (const nextJump of continueJumps) {
+                    const newBoard = simulateMove(currentBoard, nextJump);
+                    explore([...moveSequence, nextJump], newBoard);
+                }
+            }
+            
+            const firstBoard = simulateMove(boardState, initialJump);
+            explore([initialJump], firstBoard);
+            
+            return sequences;
+        }
+        
+        function makeMove(move) {
+            if (move.isMultiJump && move.jumpSequence) {
+                // Execute entire multi-jump sequence
+                for (const jump of move.jumpSequence) {
+                    executeSingleMove(jump);
+                }
+            } else {
+                executeSingleMove(move);
+            }
+            
+            currentPlayer = currentPlayer === RED ? BLACK : RED;
+            renderBoard();
+            checkGameOver();
+        }
+        
+        function executeSingleMove(move) {
+            const piece = board[move.startRow][move.startCol];
+            
+            // Move piece
+            board[move.endRow][move.endCol] = piece;
+            board[move.startRow][move.startCol] = EMPTY;
+            
+            // Handle capture
+            if (move.isJump) {
+                board[move.capturedRow][move.capturedCol] = EMPTY;
+            }
+            
+            // Check for king promotion
+            if (!piece.king) {
+                if (piece.player === RED && move.endRow === 0) {
+                    piece.king = true;
+                } else if (piece.player === BLACK && move.endRow === 7) {
+                    piece.king = true;
+                }
+            }
+        }
+        
+        function checkGameOver() {
+            const redMoves = getAllMoves(RED, board);
+            const blackMoves = getAllMoves(BLACK, board);
+            
+            if (redMoves.length === 0) {
+                endGame(BLACK);
+            } else if (blackMoves.length === 0) {
+                endGame(RED);
+            } else {
+                updateMessage();
+            }
+        }
+        
+        function updateMessage() {
+            if (currentPlayer === RED) {
+                message.textContent = 'Your turn! Click a red piece to move';
+                message.classList.remove('lose', 'multi-jump-notice');
+            } else {
+                message.textContent = 'AI is thinking...';
+                message.classList.add('lose');
+                message.classList.remove('multi-jump-notice');
+            }
+        }
+        
+        function endGame(winner) {
+            gameActive = false;
+            multiJumpInProgress = false;
+            currentJumpingPiece = null;
+            if (winner === RED) {
+                message.textContent = '🎉 You Win!';
+                message.classList.add('win');
+                message.classList.remove('lose', 'multi-jump-notice');
+            } else {
+                message.textContent = '🤖 AI Wins!';
+                message.classList.add('lose');
+                message.classList.remove('multi-jump-notice');
+            }
+        }
+        
+        function aiMove() {
+            message.textContent = 'AI is thinking...';
+            message.classList.add('lose');
+            thinkTimeDisplay.classList.add('thinking');
+            
+            positionsEvaluated = 0;
+            const startTime = performance.now();
+            
+            const bestMove = findBestMove(board, BLACK, searchDepth);
+            
+            const endTime = performance.now();
+            const thinkTime = Math.round(endTime - startTime);
+            
+            positionsDisplay.textContent = positionsEvaluated.toLocaleString();
+            thinkTimeDisplay.textContent = thinkTime + 'ms';
+            thinkTimeDisplay.classList.remove('thinking');
+            
+            if (bestMove) {
+                makeMove(bestMove);
+            }
+        }
+        
+        function findBestMove(boardState, player, depth) {
+            const moves = getAllMoves(player, boardState);
+            
+            // Beginner mode: sometimes make random moves
+            if (randomness > 0 && Math.random() < randomness) {
+                // Pick a random move (but prefer jumps if available)
+                const jumps = moves.filter(m => m.isJump || m.isMultiJump);
+                if (jumps.length > 0 && Math.random() < 0.7) {
+                    return jumps[Math.floor(Math.random() * jumps.length)];
+                }
+                return moves[Math.floor(Math.random() * moves.length)];
+            }
+            
+            let bestScore = -Infinity;
+            let bestMove = null;
+            
+            // Order moves: multi-jumps first, then single jumps, then regular moves
+            moves.sort((a, b) => {
+                const aValue = a.isMultiJump ? 1000 + a.captureCount * 100 : (a.isJump ? 100 : 0);
+                const bValue = b.isMultiJump ? 1000 + b.captureCount * 100 : (b.isJump ? 100 : 0);
+                return bValue - aValue;
+            });
+            
+            for (const move of moves) {
+                const newBoard = applyMove(boardState, move);
+                const score = minimax(newBoard, depth - 1, -Infinity, Infinity, false);
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = move;
+                }
+            }
+            
+            return bestMove;
+        }
+        
+        function minimax(boardState, depth, alpha, beta, isMaximizing) {
+            positionsEvaluated++;
+            
+            if (depth === 0) {
+                return evaluateBoard(boardState);
+            }
+            
+            const player = isMaximizing ? BLACK : RED;
+            const moves = getAllMoves(player, boardState);
+            
+            if (moves.length === 0) {
+                return isMaximizing ? -10000 : 10000;
+            }
+            
+            if (isMaximizing) {
+                let maxScore = -Infinity;
+                for (const move of moves) {
+                    const newBoard = applyMove(boardState, move);
+                    const score = minimax(newBoard, depth - 1, alpha, beta, false);
+                    maxScore = Math.max(maxScore, score);
+                    alpha = Math.max(alpha, score);
+                    if (beta <= alpha) break;
+                }
+                return maxScore;
+            } else {
+                let minScore = Infinity;
+                for (const move of moves) {
+                    const newBoard = applyMove(boardState, move);
+                    const score = minimax(newBoard, depth - 1, alpha, beta, true);
+                    minScore = Math.min(minScore, score);
+                    beta = Math.min(beta, score);
+                    if (beta <= alpha) break;
+                }
+                return minScore;
+            }
+        }
+        
+        function applyMove(boardState, move) {
+            let newBoard = JSON.parse(JSON.stringify(boardState));
+            
+            if (move.isMultiJump && move.jumpSequence) {
+                for (const jump of move.jumpSequence) {
+                    newBoard = simulateMove(newBoard, jump);
+                }
+            } else {
+                newBoard = simulateMove(boardState, move);
+            }
+            
+            return newBoard;
+        }
+        
+        function simulateMove(boardState, move) {
+            const newBoard = JSON.parse(JSON.stringify(boardState));
+            const piece = newBoard[move.startRow][move.startCol];
+            
+            newBoard[move.endRow][move.endCol] = piece;
+            newBoard[move.startRow][move.startCol] = EMPTY;
+            
+            if (move.isJump) {
+                newBoard[move.capturedRow][move.capturedCol] = EMPTY;
+            }
+            
+            // King promotion
+            if (!piece.king) {
+                if (piece.player === RED && move.endRow === 0) {
+                    piece.king = true;
+                } else if (piece.player === BLACK && move.endRow === 7) {
+                    piece.king = true;
+                }
+            }
+            
+            return newBoard;
+        }
+        
+        function evaluateBoard(boardState) {
+            let score = 0;
+            
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = boardState[row][col];
+                    if (piece) {
+                        let pieceValue = piece.king ? 15 : 10;
+                        
+                        // Only add strategic bonuses for higher difficulties
+                        if (searchDepth > 2) {
+                            // Position bonus - encourage advancement
+                            if (!piece.king) {
+                                if (piece.player === BLACK) {
+                                    pieceValue += row * 0.5;
+                                } else {
+                                    pieceValue += (7 - row) * 0.5;
+                                }
+                            }
+                            
+                            // Center control bonus
+                            if (col >= 2 && col <= 5) pieceValue += 1;
+                            
+                            // Edge penalty (pieces on edges are vulnerable)
+                            if (col === 0 || col === 7) pieceValue -= 0.5;
+                        }
+                        
+                        if (piece.player === BLACK) {
+                            score += pieceValue;
+                        } else {
+                            score -= pieceValue;
+                        }
+                    }
+                }
+            }
+            
+            return score;
+        }
+        
+        function resetGame() {
+            initBoard();
+            renderBoard();
+            selectedPiece = null;
+            validMoves = [];
+            currentPlayer = RED;
+            gameActive = true;
+            positionsEvaluated = 0;
+            multiJumpInProgress = false;
+            currentJumpingPiece = null;
+            
+            message.textContent = 'Your turn! Click a red piece to move';
+            message.classList.remove('win', 'lose', 'multi-jump-notice');
+            positionsDisplay.textContent = '0';
+            thinkTimeDisplay.textContent = '0ms';
+            clearSelection();
+        }
+        
+        // Event listeners
+        resetBtn.addEventListener('click', resetGame);
+        
+        diffBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                diffBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                searchDepth = parseInt(btn.dataset.depth);
+                randomness = parseFloat(btn.dataset.random);
+                resetGame();
+            });
+        });
+        
+        // Initialize
+        initBoard();
+        renderBoard();
+        updateMessage();
+    </script>
+</body>
+</html>
